@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Pastel violet theme */
+  --background: #faf8ff; /* soft lavender */
+  --foreground: #1f1537; /* deep violet for text */
+  --accent: #a78bfa; /* violet-400 */
+  --accent-strong: #8b5cf6; /* violet-500 */
+  --muted: #ede9fe; /* violet-100 */
 }
 
 @theme inline {
@@ -14,8 +18,11 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f0a1f;
+    --foreground: #f3f1ff;
+    --accent: #a78bfa;
+    --accent-strong: #c4b5fd;
+    --muted: #221a3d;
   }
 }
 
@@ -23,4 +30,26 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Subtle background texture using layered gradients */
+.app-bg {
+  background-image:
+    radial-gradient(60rem 60rem at -10% -10%, var(--muted) 0%, transparent 40%),
+    radial-gradient(60rem 60rem at 110% -10%, var(--muted) 0%, transparent 40%),
+    radial-gradient(60rem 60rem at 50% 120%, var(--muted) 0%, transparent 40%);
+}
+
+/* Card and column helpers */
+.card {
+  @apply bg-white/70 dark:bg-white/10 border border-violet-100/80 dark:border-white/10 shadow-sm backdrop-blur rounded-xl;
+}
+.column {
+  @apply bg-white/70 dark:bg-white/10 border border-violet-100/80 dark:border-white/10 shadow-sm backdrop-blur rounded-xl p-3 sm:p-4;
+}
+.btn-primary {
+  @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white bg-[color:var(--accent-strong)] hover:bg-[color:var(--accent)] transition-colors;
+}
+.btn-ghost {
+  @apply inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium text-[color:var(--accent-strong)] hover:bg-[color:var(--muted)]/40 transition-colors;
 }
