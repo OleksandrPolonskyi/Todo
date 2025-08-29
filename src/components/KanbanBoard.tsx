@@ -43,10 +43,9 @@ export default function KanbanBoard() {
   useEffect(() => {
     async function fetchTasks() {
       const { data, error } = await supabase
-        .from("tasks")
+        .from<TaskRow>("tasks")
         .select("id, title, status, created_at")
-        .order("created_at", { ascending: false })
-        .returns<TaskRow[]>();
+        .order("created_at", { ascending: false });
       if (error) {
         console.error("Failed to load tasks", error);
         return;
