@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
 
 type Task = {
   id: string;
@@ -13,49 +14,67 @@ type ColumnId = "todo" | "in_progress" | "done";
 
 type BoardState = Record<ColumnId, Task[]>;
 
-const STORAGE_KEY = "kanban-todo-v1";
+type TaskRow = {
+  id: string;
+  title: string;
+  status: ColumnId;
+  created_at: string;
+};
 
 function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
-function useLocalBoard(initial: BoardState) {
-  const [data, setData] = useState<BoardState>(initial);
-
-  // Load
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setData(JSON.parse(raw));
-    } catch {}
-  }, []);
-
-  // Save
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {}
-  }, [data]);
-
-  return [data, setData] as const;
-}
-
 const initialData: BoardState = {
-  todo: [
-    { id: uid(), title: "Спробувати нову дошку", createdAt: Date.now() },
-    { id: uid(), title: "Додати перше завдання", createdAt: Date.now() },
-  ],
+  todo: [],
   in_progress: [],
   done: [],
 };
 
 export default function KanbanBoard() {
-  const [board, setBoard] = useLocalBoard(initialData);
+  const [board, setBoard] = useState<BoardState>(initialData);
   const [quickAdd, setQuickAdd] = useState<Record<ColumnId, string>>({
     todo: "",
     in_progress: "",
     done: "",
   });
+
+  // Load tasks from Supabase and subscribe to changes
+  useEffect(() => {
+    async function fetchTasks() {
+      const { data } = await supabase
+        .from("tasks")
+        .select("id, title, status, created_at")
+        .order("created_at", { ascending: false })
+        .returns<TaskRow[]>();
+      if (data) {
+        const next: BoardState = { todo: [], in_progress: [], done: [] };
+        for (const t of data) {
+          next[t.status].push({
+            id: t.id,
+            title: t.title,
+            createdAt: Date.parse(t.created_at),
+          });
+        }
+        setBoard(next);
+      }
+    }
+
+    fetchTasks();
+
+    const channel = supabase
+      .channel("tasks-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks" },
+        () => fetchTasks()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const columns = useMemo(
     () => [
@@ -66,30 +85,40 @@ export default function KanbanBoard() {
     []
   );
 
-  function addTask(col: ColumnId, title: string) {
+  async function addTask(col: ColumnId, title: string) {
     if (!title.trim()) return;
+    const task = { id: uid(), title: title.trim(), createdAt: Date.now() };
     setBoard((prev) => ({
       ...prev,
-      [col]: [{ id: uid(), title: title.trim(), createdAt: Date.now() }, ...prev[col]],
+      [col]: [task, ...prev[col]],
     }));
     setQuickAdd((q) => ({ ...q, [col]: "" }));
+    await supabase.from("tasks").insert({
+      id: task.id,
+      title: task.title,
+      status: col,
+      created_at: new Date(task.createdAt).toISOString(),
+    });
   }
 
-  function removeTask(col: ColumnId, id: string) {
+  async function removeTask(col: ColumnId, id: string) {
     setBoard((prev) => ({ ...prev, [col]: prev[col].filter((t) => t.id !== id) }));
+    await supabase.from("tasks").delete().eq("id", id);
   }
 
-  function moveTask(from: ColumnId, to: ColumnId, id: string, index?: number) {
+  async function moveTask(from: ColumnId, to: ColumnId, id: string, index?: number) {
     setBoard((prev) => {
       const source = [...prev[from]];
       const target = from === to ? source : [...prev[to]];
       const i = source.findIndex((t) => t.id === id);
       if (i === -1) return prev;
       const [task] = source.splice(i, 1);
-      const insertAt = typeof index === "number" ? Math.max(0, Math.min(index, target.length)) : target.length;
+      const insertAt =
+        typeof index === "number" ? Math.max(0, Math.min(index, target.length)) : target.length;
       target.splice(insertAt, 0, task);
       return { ...prev, [from]: from === to ? target : source, [to]: target } as BoardState;
     });
+    await supabase.from("tasks").update({ status: to }).eq("id", id);
   }
 
   function onDragStart(e: React.DragEvent<HTMLDivElement>, taskId: string, from: ColumnId) {
@@ -120,9 +149,9 @@ export default function KanbanBoard() {
           <a
             className="btn-ghost"
             href="#"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.preventDefault();
-              localStorage.removeItem(STORAGE_KEY);
+              await supabase.from("tasks").delete().neq("id", "");
               location.reload();
             }}
           >
