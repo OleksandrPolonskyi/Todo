@@ -42,10 +42,14 @@ export default function KanbanBoard() {
   // Load tasks from Supabase and subscribe to changes
   useEffect(() => {
     async function fetchTasks() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from<TaskRow>("tasks")
         .select("id, title, status, created_at")
         .order("created_at", { ascending: false });
+      if (error) {
+        console.error("Failed to load tasks", error);
+        return;
+      }
       if (data) {
         const next: BoardState = { todo: [], in_progress: [], done: [] };
         for (const t of data) {
